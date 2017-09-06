@@ -44,6 +44,13 @@ board *board_new(int n) {
 	return b;
 }
 
+void board_copy(board *from, board *to) {
+	assert(from->n == to->n);
+
+	*to = *from;
+	memcpy(to->cells, from->cells, sizeof(cell) * from->n * from->n);
+}
+
 typedef enum {
 	SET_OK,
 	SET_OCCUPIED,
@@ -52,12 +59,12 @@ typedef enum {
 	SET_INVALID_CELL
 } set_result;
 
-set_result board_set(board *from, board *to, cell c, int row, int col) {
-	int n = from->n;
+set_result board_set(board *b, cell c, int row, int col) {
+	int n = b->n;
 	assert(row < n);
 	assert(col < n);
 
-	switch (from->cells[row*n + col]) {
+	switch (b->cells[row*n + col]) {
 		case BLACK:
 		case WHITE:
 			break;
@@ -67,15 +74,12 @@ set_result board_set(board *from, board *to, cell c, int row, int col) {
 			return SET_OCCUPIED;
 	}
 
-	*to = *from;
-	memcpy(to->cells, from->cells, sizeof(cell)*n*n);
-
 	for (int i = 0; i < n; i++) {
 		for (int j = 0; j < n; j++) {
 			int idx = i*n + j;
 
 			if (i == row && j == col) {
-				to->cells[idx] = c;
+				b->cells[idx] = c;
 			} else {
 				switch (c) {
 					case BLACK:
@@ -89,10 +93,10 @@ set_result board_set(board *from, board *to, cell c, int row, int col) {
 								(row - i == col -j) ||
 								(row - i == j - col)
 						   ) {
-							if (to->cells[idx] > ATTACK) {
+							if (b->cells[idx] > ATTACK) {
 								return SET_ATTACKING_POSITION;
 							}
-							to->cells[idx] = ATTACK;
+							b->cells[idx] = ATTACK;
 						}
 						break;
 				}
@@ -126,29 +130,29 @@ void board_print(board *b) {
 	}
 }
 
-bool test_board(board *b, int row) {
+bool board_test(board *b, int row) {
 	int n = b->n;
 	if (row >= n) return true;
 
 	board *tmp = board_new(n);
+	board_copy(b, tmp);
 	for (int col = 0; col < n; col++) {
-		if (b->cells[row*n + col] > WHITE) continue;
+		if (board_set(tmp, QUEEN, row, col) != SET_OK) {
+			board_copy(b, tmp);
+			continue;
+		}
 
-		board_set(b, tmp, QUEEN, row, col);
-		if (test_board(tmp, row+1)) {
-			*b = *tmp;
-			memcpy(b->cells, tmp->cells, sizeof(cell)*n*n);
-			free(tmp);
+		if (board_test(tmp, row+1)) {
+			board_copy(tmp, b);
 			return true;
 		}
 	}
 
-	free(tmp);
 	return false;
 }
 
 void debug_set(board *b, int x, int y) {
-	set_result res = board_set(b, b, QUEEN, x, y);
+	set_result res = board_set(b, QUEEN, x, y);
 	if (res != SET_OK) {
 		fprintf(stderr, "failed to set queen to %c%d: %d\n", 'A'+y, x+1, res);
 		exit(1);
@@ -164,7 +168,7 @@ int main(int argc, char** argv) {
 	}
 
 	board *b = board_new(n);
-	if (test_board(b, 0)) {
+	if (board_test(b, 0)) {
 		fprintf(stderr, "success!\n");
 		board_print(b);
 	} else {
